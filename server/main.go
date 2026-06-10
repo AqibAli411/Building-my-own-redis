@@ -15,9 +15,28 @@ func main() {
 	defer ln.Close()
 	fmt.Println("Server running on :1234")
 	for {
-		_, err := ln.Accept()
+		conn, err := ln.Accept()
 		if err != nil {
 			fmt.Println("Error accepting:", err.Error())
+			continue
 		}
+		go handleConnection(conn)
 	}
+}
+
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
+	buf := make([]byte, 1024)
+	n, err := conn.Read(buf)
+	if err != nil {
+		return
+	}
+	cmd, err := ParseReq(buf[:n])
+	if err != nil {
+		conn.Write([]byte(err.Error()))
+		return
+	}
+	var out []byte
+	DoRequest(cmd, &out)
+	conn.Write(out)
 }
