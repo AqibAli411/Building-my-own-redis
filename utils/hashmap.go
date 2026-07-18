@@ -26,11 +26,10 @@ const (
 	T_ANY             EntryType = 3
 	K_MAX_LOAD_FACTOR           = 8   // max keys per slot on average before resize
 	K_RESIZING_WORK             = 128 // nodes to migrate per operation
-
 )
 
 type Entry struct {
-	Node      HNode // FIRST field — this is critical
+	Node      HNode
 	Key       string
 	Type      EntryType
 	ZSet      *ZSet
@@ -47,8 +46,10 @@ type HNode struct {
 // a slice of HNode pointers (the slots) and a count of items
 type HTable struct {
 	Slots []*HNode
-	Mask  uint64
-	Size  uint64
+	// Mask = (size_of_the_table - 1) -> responsible for fast computation of slot index
+	Mask uint64
+	// No of elements in the table
+	Size uint64
 }
 
 // 3. The outer hashtable that manages progressive resizing
@@ -62,7 +63,6 @@ type HMap struct {
 // Trigger resize when:
 // hmap.Newer.Size >= (hmap.Newer.Mask + 1) * K_MAX_LOAD_FACTOR
 // i.e., load factor exceeded
-
 func HashKey(key string) uint64 {
 	h := fnv.New64a()
 	h.Write([]byte(key))
@@ -87,18 +87,21 @@ func htabInit(tab *HTable, n uint64) error {
 
 func htabInsert(table *HTable, node *HNode) {
 	// index = node.Hcode % table_size
+	// equivalent to node.Hcode % (table.Mask + 1)
 	slot := node.Hcode & table.Mask // which bucket?
 	node.next = table.Slots[slot]   // prepend to chain
 	table.Slots[slot] = node        // new head
 	table.Size++                    // number of elements
 }
 
+// returns the pointer to a pointer which is pointing to the keyNode in the table
 func htabLookup(table *HTable, keyNode *HNode, eq func(*HNode, *HNode) bool) **HNode {
 	if table == nil || len(table.Slots) == 0 {
 		return nil
 	}
 
 	slot := keyNode.Hcode & table.Mask
+	// a pointer to the pointer that is pointing to the head of the linked list present at index = slot in the hash table
 	curr := &table.Slots[slot]
 
 	for *curr != nil {
@@ -106,18 +109,18 @@ func htabLookup(table *HTable, keyNode *HNode, eq func(*HNode, *HNode) bool) **H
 			return curr
 		}
 		// we are passing the address of next pointer (not the node, next points to)
+		// equivalent to &((*(*curr)).next)
 		curr = &(*curr).next
 	}
 	return nil
 }
 
-// from is the result of htabLookup: a pointer to the slot or Next field
 func htabDetach(htable *HTable, from **HNode) *HNode {
 	if *from == nil {
 		return nil
 	}
 
-	// *from -> a pointer that points to same node as next node
+	// *from -> next pointer of a node which was previously pointing to the node tobe deleted
 	var nodeTobeDeleted *HNode = *from
 	*from = nodeTobeDeleted.next
 	htable.Size -= 1
@@ -134,6 +137,7 @@ func hmapStartResize(hmap *HMap) error {
 	if err != nil {
 		return fmt.Errorf("failed to init newer table: %w", err)
 	}
+
 	// start from oth slot of older table
 	hmap.MigratePos = 0
 	return nil
@@ -141,7 +145,7 @@ func hmapStartResize(hmap *HMap) error {
 
 // The Migration Step
 // This is the function that runs on every hashtable operation.
-// It moves a fixed number of keys from Older to Newer
+// It moves a fixed number of keys from Older to Newer hash table
 func HmapMigrate(hmap *HMap) {
 	if hmap.Older == nil {
 		return
@@ -164,7 +168,7 @@ func HmapMigrate(hmap *HMap) {
 		// delete node from older table and insert it into the newer table
 		node := htabDetach(hmap.Older, from)
 		htabInsert(hmap.Newer, node)
-		// move to next entity in the linkedlist at the position we're currently migrating from migratePos
+
 		workDone++
 	}
 
@@ -185,9 +189,8 @@ func HmapLookup(hmap *HMap, key *HNode, eq func(*HNode, *HNode) bool) **HNode {
 	return result
 }
 
-// hmap -> nil
 func HmapInsert(hmap *HMap, node *HNode) {
-	// there is no newer table
+	// check if there has been any insertion if not initialize the table and then proceed inserting
 	if hmap.Newer == nil {
 		hmap.Newer = &HTable{}
 		err := htabInit(hmap.Newer, 4)
@@ -196,11 +199,13 @@ func HmapInsert(hmap *HMap, node *HNode) {
 			return
 		}
 	}
+
 	htabInsert(hmap.Newer, node)
 
 	if hmap.Older == nil {
 		// no resize currently happening — check if we need to start one
 		// if number of entities at each slot exceed max load factor (8)
+		// (number of elements / number of slots) >= K_MAX_LOAD_FACTOR
 		if (hmap.Newer.Size) >= (hmap.Newer.Mask+1)*K_MAX_LOAD_FACTOR {
 			err := hmapStartResize(hmap)
 			if err != nil {
@@ -209,13 +214,14 @@ func HmapInsert(hmap *HMap, node *HNode) {
 			}
 		}
 	}
-	// at last because we need to take in account if user is inserting at the first time
+	// The step is at the end of function because we need to take in account if user is inserting at the first time
 	HmapMigrate(hmap)
 }
 
+// delete node from the hashmap
 func HmapDetach(hmap *HMap, node *HNode, eq func(*HNode, *HNode) bool) *HNode {
 	HmapMigrate(hmap)
-
+	
 	// check in newer and delete
 	from := htabLookup(hmap.Newer, node, eq)
 	if from != nil {
@@ -231,6 +237,7 @@ func HmapDetach(hmap *HMap, node *HNode, eq func(*HNode, *HNode) bool) *HNode {
 	return nil
 }
 
+// for each entry in the hashmap (including both newer and older slots) call the callback function
 func HmapForEach(hmap *HMap, callback func(*HNode) bool) {
 	if hmap == nil {
 		return
@@ -256,6 +263,7 @@ func HmapForEach(hmap *HMap, callback func(*HNode) bool) {
 	}
 }
 
+// total number of entities in the hashmap (including both newer and older slots)
 func HmapSize(hmap *HMap) uint64 {
 	var size uint64
 	if hmap.Newer != nil {

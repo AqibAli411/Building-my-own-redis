@@ -43,7 +43,7 @@ func heapDown(heap []HeapItem, pos int) {
 		minIndex := pos
 		minValue := save.Val
 
-		// pick minium of both right and left child
+		// pick minimum of both right and left child
 		if rightChildPos < len(heap) && heap[rightChildPos].Val < minValue {
 			minIndex = rightChildPos
 			minValue = heap[rightChildPos].Val
@@ -116,7 +116,7 @@ func HeapUpsert(heap *[]HeapItem, pos int, item HeapItem) {
 	}
 }
 
-// function for debuging
+// function for debugging
 func IsValidHeap(heap []HeapItem) bool {
 	for i, v := range heap {
 		rightChild := 2*i + 2

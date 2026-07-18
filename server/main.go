@@ -31,9 +31,10 @@ type Conn struct {
 	IdleNode     utils.Dlist // intrusive list node — embedded
 }
 
-func fb_set_nb(fb int) {
+func fd_set_nb(fd int) {
 	// FcntlInt(fb, command, arg)
-	flags, err := unix.FcntlInt(uintptr(fb), unix.F_GETFL, 0)
+	// F_GETFL -> syscall for geting the flags
+	flags, err := unix.FcntlInt(uintptr(fd), unix.F_GETFL, 0)
 	if err != nil {
 		panic(err)
 	}
@@ -41,14 +42,14 @@ func fb_set_nb(fb int) {
 	// set the file descriptor to non-blocking mode
 	// by attaching the flags
 	flags |= unix.O_NONBLOCK
-	_, err = unix.FcntlInt(uintptr(fb), unix.F_SETFL, flags)
+	_, err = unix.FcntlInt(uintptr(fd), unix.F_SETFL, flags)
 	if err != nil {
 		panic(err)
 	}
 }
 
 func connectionIO(conn *Conn) {
-	//check if it is for repsonse or request
+	//check if it is for response or request
 	if conn.state == STATE_REQ {
 		// handle request
 		state_req(conn)
@@ -235,7 +236,7 @@ func accept_conn(fd int, fd2Conn map[int32]*Conn) error {
 		return err
 	}
 
-	fb_set_nb(connFd)
+	fd_set_nb(connFd)
 
 	conn := &Conn{
 		fd:        connFd,
@@ -316,7 +317,7 @@ func nextTimerMs() int32 {
 	return int32(nextMs - now)
 }
 
-func destoryConn(conn *Conn, fd2Conn map[int32]*Conn) {
+func destroyConn(conn *Conn, fd2Conn map[int32]*Conn) {
 	unix.Close(conn.fd)
 	// remove it from the list
 	utils.DlistDetach(&conn.IdleNode)
@@ -334,12 +335,12 @@ func processTimers(fd2Conn map[int32]*Conn) {
 		expiresAt := conn.LastActiveMs + utils.K_IDLE_TIMEOUT_MS
 
 		if expiresAt >= now {
-	 		break
+			break
 		}
 
 		log.Println("closing idle connection")
 
-		destoryConn(conn, fd2Conn)
+		destroyConn(conn, fd2Conn)
 	}
 
 	workDone := 0
@@ -354,7 +355,7 @@ func processTimers(fd2Conn map[int32]*Conn) {
 		utils.DeleteHeap(&Gdata.heap, 0)
 		entry.HeapIndex = -1
 		utils.HmapDetach(&Gdata.DB, &entry.Node, utils.NodeEq) // remove from hashtable
-		entryDel(entry) // free/clean the entry (HeapIndex is -1, so entrySetTTL is a no-op)
+		entryDel(entry)                                        // free/clean the entry (HeapIndex is -1, so entrySetTTL is a no-op)
 		workDone++
 	}
 
@@ -402,7 +403,7 @@ func main() {
 
 	// var fd2Conn []*Conn
 	fd2Conn := make(map[int32]*Conn)
-	fb_set_nb(fd)
+	fd_set_nb(fd)
 
 	var poll_args []unix.PollFd
 
@@ -470,7 +471,7 @@ func main() {
 			connectionIO(conn)
 
 			if conn.state == STATE_END {
-				destoryConn(conn, fd2Conn)
+				destroyConn(conn, fd2Conn)
 			}
 		}
 

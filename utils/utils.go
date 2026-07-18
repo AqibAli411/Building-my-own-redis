@@ -9,7 +9,6 @@ import (
 const K_MAX_MESSAGE uint32 = 4096
 const K_IDLE_TIMEOUT_MS uint64 = 15_000
 
-// hint — define these as a uint8 type:
 type TagType uint8
 
 const (

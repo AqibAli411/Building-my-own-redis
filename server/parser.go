@@ -17,10 +17,10 @@ func ParseReq(bytes []byte) ([]string, error) {
 	offset := 0
 	nstr := binary.LittleEndian.Uint32(bytes[offset : offset+4])
 	if nstr > K_MAX_ARGS {
-		return nil, fmt.Errorf("error: maximun number of arguments exceded: %d", nstr)
+		return nil, fmt.Errorf("error: maximum number of arguments exceeded: %d", nstr)
 	}
 	offset += 4
-	
+
 	results := make([]string, nstr)
 	r_len := nstr
 	for nstr > 0 {
@@ -39,7 +39,7 @@ func ParseReq(bytes []byte) ([]string, error) {
 		copy(s, bytes[offset:offset+n])
 		offset += n
 
-		results[r_len-nstr] = string(s)
+		results[r_len - nstr] = string(s)
 		nstr -= 1
 	}
 

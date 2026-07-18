@@ -14,7 +14,6 @@ func DlistInit(dummy *Dlist) *Dlist {
 
 // returns true if the list is empty, false otherwise
 func DlistEmpty(d *Dlist) bool {
-
 	return d.Next == d
 }
 

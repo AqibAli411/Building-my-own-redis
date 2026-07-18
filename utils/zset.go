@@ -13,11 +13,11 @@ type ZNode struct {
 	Name  string
 }
 
-// ZSet — The Container-> compelete set
+// ZSet — The Container-> complete set
 type ZSet struct {
 	// AVL tree indexed by (score, name)
 	Root *AVLNode
-	// for inside the set (memeber <-> score)
+	// for inside the set (member <-> score)
 	HMap HMap
 }
 
@@ -34,7 +34,7 @@ func NodeEq(a *HNode, b *HNode) bool {
 	return za.Key == zb.Key
 }
 
-// checks if the names of memebers are same
+// checks if the names of members are same
 func ZNodeEq(a *HNode, b *HNode) bool {
 	// a points to ZNode.HNode which is NOT the first field
 	// so we need to subtract the offset of HNode within ZNode
@@ -59,7 +59,7 @@ func Zless(a *AVLNode, b *AVLNode) bool {
 	return za.Name < zb.Name
 }
 
-// just remeber we're inside a container called set
+// just remember we're inside a container called set
 // Point Queries: Lookup, Insert, Delete
 func ZSetLookup(zset *ZSet, member string) *ZNode {
 	// if hmap is empty we can't look up
